@@ -477,6 +477,8 @@ export interface PluginUsersPermissionsUser
       'oneToMany',
       'api::category.category'
     >;
+    deviceToken: Schema.Attribute.Text;
+    deviceOS: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

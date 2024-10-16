@@ -82,6 +82,12 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::category.category"
+    },
+    "deviceToken": {
+      "type": "text"
+    },
+    "deviceOS": {
+      "type": "string"
     }
   }
 }
