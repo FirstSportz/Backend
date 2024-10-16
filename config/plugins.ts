@@ -1,4 +1,4 @@
-export default ({ env }) => ({
+export default ({ strapi }) => ({
     // Extend the users-permissions plugin configuration
     'users-permissions': {
       config: {
@@ -8,18 +8,27 @@ export default ({ env }) => ({
       },
     },
   
-    email: {
-        config: {
-          provider: 'strapi-provider-email-brevo',
-          providerOptions: {
-            apiKey: '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',
-          },
-          settings: {
-            defaultFrom: 'aditya.mahajan@firstsportz.com',
-            defaultSenderName: 'FirstSportz',
-            defaultReplyTo: 'aditya.mahajan@firstsportz.com',
-          },
-        },
-      }
+    // Extending the findOne method to populate categories
+    bootstrap() {
+      const extensionService = strapi.plugin('users-permissions').service('user');
+  
+      const originalFindOne = extensionService.findOne;
+  
+      extensionService.findOne = async (id, params) => {
+        // Initialize params if it's undefined
+        params = params || {};
+  
+        // Ensure categories are populated when fetching user data
+        if (!params.populate) {
+          params.populate = [];
+        }
+  
+        // Add categories to the populate array
+        params.populate.push('categories');
+  
+        // Call the original findOne method with the modified params
+        return originalFindOne.call(extensionService, id, params);
+      };
+    },
   });
   
