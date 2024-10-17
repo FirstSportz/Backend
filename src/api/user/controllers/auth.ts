@@ -51,33 +51,4 @@ export default {
 
     return ctx.send({ message: 'Password reset email sent' });
   },
-
-  async resetPassword(ctx: Context) {
-    const { code, password } = ctx.request.body;
-
-    if (!code || !password) {
-      return ctx.badRequest('Missing code or password');
-    }
-
-    // Find user by reset token
-    const user: User | null = await strapi.query('plugin::users-permissions.user').findOne({
-      where: { resetPasswordToken: code },
-    });
-
-    if (!user || new Date() > new Date(user.resetPasswordTokenExpires!)) {
-      return ctx.badRequest('Invalid or expired token');
-    }
-
-    // Update the user's password and clear the reset token
-    await strapi.query('plugin::users-permissions.user').update({
-      where: { id: user.id },
-      data: {
-        password: await strapi.plugin('users-permissions').service('user').hashPassword({ password }),
-        resetPasswordToken: null,
-        resetPasswordTokenExpires: null,
-      },
-    });
-
-    return ctx.send({ message: 'Password reset successful' });
-  },
 };
