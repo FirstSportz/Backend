@@ -43,10 +43,15 @@ export default {
 
     // Send the email
     await strapi.plugin('email').service('email').send({
-      to: user.email,
-      subject: 'Password Reset',
-      text: `Use this code to reset your password: ${resetToken}`,
-      html: `<p>Use this code to reset your password: <strong>${resetToken}</strong></p>`,
+        to: user.email,
+        subject: 'Reset Your Password',
+        text: `We heard that you lost your password. Sorry about that! But don’t worry! You can use the following code to reset your password inside the app: ${resetToken} Thanks.`,
+        html: `
+          <p>We heard that you lost your password. Sorry about that!</p>
+          <p>But don’t worry! You can use the following code to reset your password inside the app:</p>
+          <h2>${resetToken}</h2>
+          <p>Thanks.</p>
+        `,
     });
 
     return ctx.send({ message: 'Password reset email sent' });
