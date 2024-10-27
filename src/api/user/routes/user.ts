@@ -16,6 +16,23 @@ export default {
           policies: [],
         },
       },
+      {
+        method: 'POST',
+        path: '/users/upload-avatar',
+        handler: 'user.uploadAvatar',
+        config: {
+          policies: [], // optional: if you want to restrict to authenticated users only
+        },
+      },
+
+      {
+        method: 'POST',
+        path: '/users/delete-avatar',
+        handler: 'user.deleteAvatar',
+        config: {
+          policies: [], // optional: if you want to restrict to authenticated users only
+        },
+      },
     ],
   };
   
