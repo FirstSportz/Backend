@@ -65,6 +65,9 @@
       "relation": "manyToMany",
       "target": "plugin::users-permissions.user",
       "mappedBy": "news"
+    },
+    "newslink": {
+      "type": "text"
     }
   }
 }
