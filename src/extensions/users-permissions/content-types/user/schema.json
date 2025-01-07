@@ -100,6 +100,9 @@
       "relation": "manyToMany",
       "target": "api::tag.tag",
       "inversedBy": "users"
+    },
+    "recentsearch": {
+      "type": "json"
     }
   }
 }
