@@ -481,6 +481,7 @@ export interface PluginUsersPermissionsUser
     deviceOS: Schema.Attribute.String;
     news: Schema.Attribute.Relation<'manyToMany', 'api::article.article'>;
     tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
+    recentsearch: Schema.Attribute.JSON;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

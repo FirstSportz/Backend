@@ -1,6 +1,7 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::article.article', ({ strapi }) => ({
+ 
   // Follow an article
   async followArticle(ctx) {
     const userId = ctx.state.user.id; // Get the logged-in user's ID
@@ -48,4 +49,36 @@ export default factories.createCoreController('api::article.article', ({ strapi 
       return ctx.throw(500, `Error unfollowing article: ${error.message}`);
     }
   },
+
+  async find(ctx) {
+    const { query } = ctx;
+  
+    try {
+      // Fetch articles
+      const articles = await strapi.entityService.findMany('api::article.article', {
+        ...query,
+        populate: '*',
+      });
+  
+      // Fetch recent searches
+      const userId = ctx.state.user?.id;
+      
+  
+      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId); 
+
+      const recentSearch = user.recentsearch; 
+        
+      // Fetch global popular tags
+      const popularTags = await strapi.services['api::tag.tag'].getPopularTags();
+  
+      return ctx.send({
+        articles,
+        recentSearch,
+        popularTags,
+      });
+    } catch (error) {
+      return ctx.throw(500, `Error fetching data: ${error.message}`);
+    }
+  },
+  
 }));

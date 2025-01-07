@@ -3,7 +3,7 @@ export default ({ env }) => ({
     'users-permissions': {
       config: {
         register: {
-          allowedFields: ['phoneNumber', 'avatar', 'categories',"deviceToken","deviceOS"],
+          allowedFields: ['phoneNumber', 'avatar', 'categories',"deviceToken","deviceOS","recentsearch"],
         },
       },
     },
