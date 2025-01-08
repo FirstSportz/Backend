@@ -2,8 +2,33 @@ import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::article.article', ({ strapi }) => ({
  
+  async fetchBookmarks(ctx) {
+    const userId = ctx.state.user?.id;
+  
+    if (!userId) {
+      return ctx.throw(401, 'User not authenticated');
+    }
+  
+    try {
+      // Fetch the user with related articles
+      
+      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+        populate: ['news'],
+      });
+
+      
+      if (!user) {
+        return ctx.throw(404, 'User not found');
+      }
+  
+      return ctx.send({ message: 'Successfully retrieved bookmarks', user });
+    } catch (error) {
+      return ctx.throw(500, `Error fetching followed articles: ${error.message}`);
+    }
+  },
+  
   // Follow an article
-  async followArticle(ctx) {
+  async addbookmark(ctx) {
     const userId = ctx.state.user.id; // Get the logged-in user's ID
     const { articleId } = ctx.request.body; // The article to follow
 
@@ -30,7 +55,7 @@ export default factories.createCoreController('api::article.article', ({ strapi 
   },
 
   // Unfollow an article
-  async unfollowArticle(ctx) {
+  async removebookmark(ctx) {
     const userId = ctx.state.user.id; // Get the logged-in user's ID
     const { articleId } = ctx.request.body; // The article to unfollow
 
