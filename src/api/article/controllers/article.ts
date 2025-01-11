@@ -176,7 +176,11 @@ export default factories.createCoreController('api::article.article', ({ strapi 
   },
 
   async search(ctx) { 
-    const { query, page = 1, pageSize = 10 } = ctx.request.body; // Search text and pagination params
+    const { query} =  ctx.request.body as Record<string, any>; // Search text and pagination params
+    
+    const page = parseInt(query.page || '1', 10); // Default to page 1
+    const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
+
     const userId = ctx.state.user?.id;
   
     if (!query) {
