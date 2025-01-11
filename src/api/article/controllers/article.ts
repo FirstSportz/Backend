@@ -176,14 +176,15 @@ export default factories.createCoreController('api::article.article', ({ strapi 
   },
 
   async search(ctx) { 
-    const { query} =  ctx.request.body as Record<string, any>; // Search text and pagination params
+    const queryParams = ctx.query as Record<string, any>; // Extract query parameters
     
-    const page = parseInt(query.page || '1', 10); // Default to page 1
-    const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
-
+    const page = parseInt(queryParams.page || '1', 10); // Default to page 1
+    const pageSize = parseInt(queryParams.pageSize || '10', 10); // Default page size is 10
+  
+    const searchQuery = ctx.request.body.query;
     const userId = ctx.state.user?.id;
   
-    if (!query) {
+    if (!searchQuery) {
       return ctx.throw(400, 'Search query is required');
     }
   
@@ -192,23 +193,27 @@ export default factories.createCoreController('api::article.article', ({ strapi 
     }
   
     try {
-      // Fetch articles based on the search query (title, description) with pagination
-      const articles = await strapi.entityService.findPage('api::article.article', {
-        filters: {
-          $or: [
-            { title: { $containsi: query } },
-            { description: { $containsi: query } },
-          ],
-        },
+      // Filters for searching articles by title or description
+      const filters = {
+        $or: [
+          { title: { $containsi: searchQuery } },
+          { description: { $containsi: searchQuery } },
+        ],
+      };
+  
+      // Fetch paginated articles
+      const articles = await strapi.entityService.findMany('api::article.article', {
+        filters,
         populate: '*',
-        pagination: {
-          page: Number(page),
-          pageSize: Number(pageSize),
-        },
+        pagination: { page, pageSize },
       });
   
-      // Map article data for the "People" section
-      let people = articles.results.map((article) => ({
+      // Count total articles for pagination metadata
+      const totalArticles = await strapi.entityService.count('api::article.article', { filters });
+      const totalPages = Math.ceil(totalArticles / pageSize);
+  
+      // Map articles for the "People" section
+      let people = articles.map((article) => ({
         id: article.id,
         title: article.title,
         description: article.description,
@@ -219,27 +224,24 @@ export default factories.createCoreController('api::article.article', ({ strapi 
         category: article['category'],
       }));
   
-      // If no articles found, search for categories matching the query
+      // Handle category search when no matching articles are found
       if (people.length === 0) {
         const categories = await strapi.entityService.findMany('api::category.category', {
-          filters: { name: { $containsi: query } },
+          filters: { name: { $containsi: searchQuery } },
         });
   
         if (categories.length > 0) {
           const categoryIds = categories.map((category) => category.id);
   
-          // Fetch related articles by category with pagination
-          const relatedArticles = await strapi.entityService.findPage('api::article.article', {
+          // Fetch related articles by category
+          const relatedArticles = await strapi.entityService.findMany('api::article.article', {
             filters: { category: { id: { $in: categoryIds } } },
             populate: '*',
-            pagination: {
-              page: Number(page),
-              pageSize: Number(pageSize),
-            },
+            pagination: { page, pageSize },
           });
   
-          // Map related articles to "People" section
-          people = relatedArticles.results.map((article) => ({
+          // Map related articles
+          people = relatedArticles.map((article) => ({
             id: article.id,
             title: article.title,
             description: article.description,
@@ -252,22 +254,28 @@ export default factories.createCoreController('api::article.article', ({ strapi 
         }
       }
   
-      // Fetch categories from category controller logic
-      const categoryResults = await strapi.service('api::category.category').searchCategories(query, articles.results);
+      // Fetch category results for events
+      const categoryResults = await strapi.service('api::category.category').searchCategories(searchQuery, articles);
   
-      // Return combined search results with pagination info
+      // Return combined results with pagination metadata
       return ctx.send({
         message: 'Search results',
         data: {
-          people,  // Articles matching query or related to categories
-          events: categoryResults, 
-          pagination: articles.pagination,  // Include pagination info
+          people,
+          events: categoryResults,
+          pagination: {
+            page,
+            pageSize,
+            total: totalArticles,
+            totalPages,
+          },
         },
       });
     } catch (error) {
       return ctx.throw(500, `Error fetching search results: ${error.message}`);
     }
   }
+  
   
   
   
