@@ -2,8 +2,33 @@ import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::article.article', ({ strapi }) => ({
  
+  async fetchBookmarks(ctx) {
+    const userId = ctx.state.user?.id;
+  
+    if (!userId) {
+      return ctx.throw(401, 'User not authenticated');
+    }
+  
+    try {
+      // Fetch the user with related articles
+      
+      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+        populate: ['news'],
+      });
+
+      
+      if (!user) {
+        return ctx.throw(404, 'User not found');
+      }
+  
+      return ctx.send({ message: 'Successfully retrieved bookmarks', user });
+    } catch (error) {
+      return ctx.throw(500, `Error fetching followed articles: ${error.message}`);
+    }
+  },
+  
   // Follow an article
-  async followArticle(ctx) {
+  async addbookmark(ctx) {
     const userId = ctx.state.user.id; // Get the logged-in user's ID
     const { articleId } = ctx.request.body; // The article to follow
 
@@ -30,7 +55,7 @@ export default factories.createCoreController('api::article.article', ({ strapi 
   },
 
   // Unfollow an article
-  async unfollowArticle(ctx) {
+  async removebookmark(ctx) {
     const userId = ctx.state.user.id; // Get the logged-in user's ID
     const { articleId } = ctx.request.body; // The article to unfollow
 
@@ -149,5 +174,94 @@ export default factories.createCoreController('api::article.article', ({ strapi 
       return ctx.throw(500, `Error fetching today's news: ${error.message}`);
     }
   },
+
+  async search(ctx) { 
+    const { query } = ctx.request.body; // Search text provided by the user
+    const userId = ctx.state.user?.id;
+  
+    if (!query) {
+      return ctx.throw(400, 'Search query is required');
+    }
+  
+    if (!userId) {
+      return ctx.throw(401, 'User not authenticated');
+    }
+  
+    try {
+      // Fetch articles based on the search query (title, description)
+      const articles = await strapi.entityService.findMany('api::article.article', {
+        filters: {
+          $or: [
+            { title: { $containsi: query } },
+            { description: { $containsi: query } },
+          ],
+        },
+        populate: '*',
+      });
+  
+      // Map article data to return in the "People" section
+      let people = articles.map((article) => ({
+          id: article.id,
+          title: article.title,
+          description: article.description,
+          slug: article.slug,
+          createdAt:article.createdAt,
+          newslink:article.newslink,
+          cover:article['cover'],
+          category:article['category']
+      }));
+  
+      // If no articles found in the "People" section, search for the category matching the query
+      if (people.length === 0) {
+        // Fetch matching categories by name
+        const categories = await strapi.entityService.findMany('api::category.category', {
+          filters: {
+            name: { $containsi: query },
+          },
+        });
+  
+        // If categories are found, fetch associated articles
+        if (categories.length > 0) {
+          const categoryIds = categories.map((category) => category.id);
+  
+          // Fetch articles that belong to the matching categories
+          const relatedArticles = await strapi.entityService.findMany('api::article.article', {
+            filters: {
+              category: { id: { $in: categoryIds } },
+            },
+            populate: '*',
+          });
+  
+          // Map related articles and add to "People" section
+          people = relatedArticles.map((article) => ({
+            id: article.id,
+            title: article.title,
+            description: article.description,
+            slug: article.slug,
+            createdAt:article.createdAt,
+            newslink:article.newslink,
+            cover:article['cover'],
+            category:article['category']
+          }));
+        }
+      }
+  
+      // Fetch categories from category controller logic
+      const categoryResults = await strapi.service('api::category.category').searchCategories(query, articles);
+  
+      // Return combined search results
+      return ctx.send({
+        message: 'Search results',
+        data: {
+          people, // Articles matching the query or related to categories
+          events: categoryResults, // Categories matching the query or related to articles
+        },
+      });
+    } catch (error) {
+      return ctx.throw(500, `Error fetching search results: ${error.message}`);
+    }
+  }
+  
+  
   
 }));

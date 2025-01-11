@@ -22,6 +22,14 @@ export default {
           policies: [],
         },
       },
+      {
+        method: 'POST',
+        path: '/articles/search',
+        handler: 'article.search',
+        config: {
+          policies: [],
+        },
+      },
     ],
   };
   
