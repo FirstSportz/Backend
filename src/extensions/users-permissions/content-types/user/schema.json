@@ -103,6 +103,12 @@
     },
     "recentsearch": {
       "type": "json"
+    },
+    "histories": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::article.article",
+      "inversedBy": "userHistory"
     }
   }
 }

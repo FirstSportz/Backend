@@ -482,6 +482,7 @@ export interface PluginUsersPermissionsUser
     news: Schema.Attribute.Relation<'manyToMany', 'api::article.article'>;
     tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
     recentsearch: Schema.Attribute.JSON;
+    histories: Schema.Attribute.Relation<'manyToMany', 'api::article.article'>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -555,6 +556,10 @@ export interface ApiArticleArticle extends Struct.CollectionTypeSchema {
       'plugin::users-permissions.user'
     >;
     newslink: Schema.Attribute.Text;
+    userHistory: Schema.Attribute.Relation<
+      'manyToMany',
+      'plugin::users-permissions.user'
+    >;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

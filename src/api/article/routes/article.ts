@@ -30,6 +30,22 @@ export default {
           policies: [],
         },
       },
+      {
+        method: 'GET',
+        path: '/articles/fetchhistory',
+        handler: 'article.fetchReadingHistory',
+        config: {
+          policies: [],
+        },
+      },
+      {
+        method: 'POST',
+        path: '/articles/addToHistory',
+        handler: 'article.addToHistory',
+        config: {
+          policies: [],
+        },
+      },
     ],
   };
   
