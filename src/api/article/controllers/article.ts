@@ -9,25 +9,69 @@ export default factories.createCoreController('api::article.article', ({ strapi 
       return ctx.throw(401, 'User not authenticated');
     }
   
+    // Extract pagination parameters from query
+    const query = ctx.query as Record<string, any>;
+    const page = parseInt(query.page || '1', 10); // Default to page 1
+    const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
+  
     try {
-      // Fetch the user with related articles
-      
+      // Fetch user's bookmarked news with pagination applied
       const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
-        populate: ['news'],
+        populate: '*',
+        pagination: { page, pageSize },
       });
-
-      
-      if (!user) {
-        return ctx.throw(404, 'User not found');
+  
+      if (!user || !user['news']?.length) {
+        return ctx.send({
+          message: 'No bookmarks found',
+          data: { bookmarks: [] },
+          pagination: { page, pageSize, total: 0, totalPages: 0 },
+        });
       }
   
-      return ctx.send({ message: 'Successfully retrieved bookmarks', user });
+      const bookmarkIds = user['news'].map((bookmark) => bookmark.id);
+  
+      // Fetch full article data for each bookmark entry using the IDs
+      const [articles, total] = await Promise.all([
+        strapi.entityService.findMany('api::article.article', {
+          filters: { id: { $in: bookmarkIds } },
+          populate: ['cover', 'category'],
+        }),
+        strapi.entityService.count('api::article.article', {
+          filters: { id: { $in: bookmarkIds } },
+        }),
+      ]);
+  
+      const totalPages = Math.ceil(total / pageSize);
+  
+      // Map the article data to the response format
+      const bookmarks = articles.map((article) => ({
+        id: article.id,
+        title: article.title,
+        description: article.description,
+        slug: article.slug,
+        createdAt: article.createdAt,
+        newslink: article.newslink,
+        cover: article['cover'],
+        category: article['category'],
+      }));
+  
+      return ctx.send({
+        message: 'Successfully retrieved bookmarks',
+        bookmarks,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages,
+        },
+      });
     } catch (error) {
-      return ctx.throw(500, `Error fetching followed articles: ${error.message}`);
+      return ctx.throw(500, `Error fetching bookmarks: ${error.message}`);
     }
   },
   
-  // Follow an article
+  // Follow an article and add to bookmarks
   async addbookmark(ctx) {
     const userId = ctx.state.user.id; // Get the logged-in user's ID
     const { articleId } = ctx.request.body; // The article to follow
@@ -43,12 +87,38 @@ export default factories.createCoreController('api::article.article', ({ strapi 
         return ctx.throw(404, 'Article not found');
       }
 
-      // Find the user and update their followed_articles field
-      const user = await strapi.plugins['users-permissions'].services.user.edit(userId, {
-        news: [...(ctx.state.user.news || []), articleId], // Add article ID to followed list
-      });
+       // Fetch the user's current bookmarks
+    const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+      where: { id: userId },
+      populate: ['news'], // Populate the news (bookmarks) relation
+    });
 
-      return ctx.send({ message: 'Successfully followed the article', user });
+    if (!user) {
+      return ctx.throw(404, 'User not found');
+    }
+
+     // Extract current bookmark IDs
+     const currentBookmarkIds = user.news.map((entry) => entry.id);
+
+     // Check for duplicates
+    if (currentBookmarkIds.includes(articleId)) {
+      return ctx.send({ message: 'Article already bookmarked' });
+    }
+
+     // Append new article ID to the bookmark list
+     currentBookmarkIds.push(articleId);
+
+       // Update the user's bookmarks
+    await strapi.db.query('plugin::users-permissions.user').update({
+      where: { id: userId },
+      data: {
+        news: currentBookmarkIds.map((id) => ({ id })),
+      },
+    });
+
+    return ctx.send({ message: 'Successfully bookmarked the article',user });
+
+     
     } catch (error) {
       return ctx.throw(500, `Error following article: ${error.message}`);
     }
@@ -209,8 +279,8 @@ export default factories.createCoreController('api::article.article', ({ strapi 
       });
   
       // Count total articles for pagination metadata
-      const totalArticles = await strapi.entityService.count('api::article.article', { filters });
-      const totalPages = Math.ceil(totalArticles / pageSize);
+      let totalArticles = await strapi.entityService.count('api::article.article', { filters });
+      let totalPages = Math.ceil(totalArticles / pageSize);
   
       // Map articles for the "People" section
       let people = articles.map((article) => ({
@@ -230,6 +300,7 @@ export default factories.createCoreController('api::article.article', ({ strapi 
           filters: { name: { $containsi: searchQuery } },
         });
   
+   
         if (categories.length > 0) {
           const categoryIds = categories.map((category) => category.id);
   
@@ -239,6 +310,14 @@ export default factories.createCoreController('api::article.article', ({ strapi 
             populate: '*',
             pagination: { page, pageSize },
           });
+
+        totalArticles = await strapi.entityService.count('api::article.article', {
+          filters: { category: { id: { $in: categoryIds } } },
+        });
+
+        totalPages = Math.ceil(totalArticles / pageSize);
+
+  
   
           // Map related articles
           people = relatedArticles.map((article) => ({
@@ -257,6 +336,26 @@ export default factories.createCoreController('api::article.article', ({ strapi 
       // Fetch category results for events
       const categoryResults = await strapi.service('api::category.category').searchCategories(searchQuery, articles);
   
+       // Append the search query to the user's recent search field
+    const timestamp = new Date().toISOString();
+    const recentSearchEntry = { query: searchQuery, timestamp };
+
+
+    const user = userId
+    ? await strapi.entityService.findOne('plugin::users-permissions.user', userId)
+    : null;
+  
+
+    // Ensure recentSearch is an array or initialize it as one
+    const currentSearches = Array.isArray(user?.recentsearch) ? user.recentsearch : [];
+
+   // Update recent searches while maintaining a maximum of 10 entries
+   const updatedSearches = [...currentSearches, recentSearchEntry].slice(-10);
+
+// Update the user with the new recent search data
+await strapi.entityService.update('plugin::users-permissions.user', userId, {
+  data: { recentsearch: updatedSearches },
+});
       // Return combined results with pagination metadata
       return ctx.send({
         message: 'Search results',
