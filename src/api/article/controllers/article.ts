@@ -176,7 +176,7 @@ export default factories.createCoreController('api::article.article', ({ strapi 
   },
 
   async search(ctx) { 
-    const { query } = ctx.request.body; // Search text provided by the user
+    const { query, page = 1, pageSize = 10 } = ctx.request.body; // Search text and pagination params
     const userId = ctx.state.user?.id;
   
     if (!query) {
@@ -188,8 +188,8 @@ export default factories.createCoreController('api::article.article', ({ strapi 
     }
   
     try {
-      // Fetch articles based on the search query (title, description)
-      const articles = await strapi.entityService.findMany('api::article.article', {
+      // Fetch articles based on the search query (title, description) with pagination
+      const articles = await strapi.entityService.findPage('api::article.article', {
         filters: {
           $or: [
             { title: { $containsi: query } },
@@ -197,70 +197,74 @@ export default factories.createCoreController('api::article.article', ({ strapi 
           ],
         },
         populate: '*',
+        pagination: {
+          page: Number(page),
+          pageSize: Number(pageSize),
+        },
       });
   
-      // Map article data to return in the "People" section
-      let people = articles.map((article) => ({
-          id: article.id,
-          title: article.title,
-          description: article.description,
-          slug: article.slug,
-          createdAt:article.createdAt,
-          newslink:article.newslink,
-          cover:article['cover'],
-          category:article['category']
+      // Map article data for the "People" section
+      let people = articles.results.map((article) => ({
+        id: article.id,
+        title: article.title,
+        description: article.description,
+        slug: article.slug,
+        createdAt: article.createdAt,
+        newslink: article.newslink,
+        cover: article['cover'],
+        category: article['category'],
       }));
   
-      // If no articles found in the "People" section, search for the category matching the query
+      // If no articles found, search for categories matching the query
       if (people.length === 0) {
-        // Fetch matching categories by name
         const categories = await strapi.entityService.findMany('api::category.category', {
-          filters: {
-            name: { $containsi: query },
-          },
+          filters: { name: { $containsi: query } },
         });
   
-        // If categories are found, fetch associated articles
         if (categories.length > 0) {
           const categoryIds = categories.map((category) => category.id);
   
-          // Fetch articles that belong to the matching categories
-          const relatedArticles = await strapi.entityService.findMany('api::article.article', {
-            filters: {
-              category: { id: { $in: categoryIds } },
-            },
+          // Fetch related articles by category with pagination
+          const relatedArticles = await strapi.entityService.findPage('api::article.article', {
+            filters: { category: { id: { $in: categoryIds } } },
             populate: '*',
+            pagination: {
+              page: Number(page),
+              pageSize: Number(pageSize),
+            },
           });
   
-          // Map related articles and add to "People" section
-          people = relatedArticles.map((article) => ({
+          // Map related articles to "People" section
+          people = relatedArticles.results.map((article) => ({
             id: article.id,
             title: article.title,
             description: article.description,
             slug: article.slug,
-            createdAt:article.createdAt,
-            newslink:article.newslink,
-            cover:article['cover'],
-            category:article['category']
+            createdAt: article.createdAt,
+            newslink: article.newslink,
+            cover: article['cover'],
+            category: article['category'],
           }));
         }
       }
   
       // Fetch categories from category controller logic
-      const categoryResults = await strapi.service('api::category.category').searchCategories(query, articles);
+      const categoryResults = await strapi.service('api::category.category').searchCategories(query, articles.results);
   
-      // Return combined search results
+      // Return combined search results with pagination info
       return ctx.send({
         message: 'Search results',
         data: {
-          people, // Articles matching the query or related to categories
-          events: categoryResults, // Categories matching the query or related to articles
+          people,  // Articles matching query or related to categories
+          events: categoryResults, 
+          pagination: articles.pagination,  // Include pagination info
         },
       });
     } catch (error) {
       return ctx.throw(500, `Error fetching search results: ${error.message}`);
     }
   }
+  
   
   
   
