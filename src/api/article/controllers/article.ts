@@ -274,10 +274,126 @@ export default factories.createCoreController('api::article.article', ({ strapi 
     } catch (error) {
       return ctx.throw(500, `Error fetching search results: ${error.message}`);
     }
+  },
+
+  async addToHistory(ctx) {
+    try {
+      const userId = ctx.state.user?.id; // Get the logged-in user's ID
+      const { articleId } = ctx.request.body; // The article to add to history
+  
+      if (!articleId) {
+        return ctx.throw(400, 'Article ID is required');
+      }
+  
+      // Fetch the user's current history directly from the database
+      const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+        where: { id: userId },
+        populate: ['histories'],
+      });
+  
+      if (!user) {
+        return ctx.throw(404, 'User not found');
+      }
+  
+      // Extract current history IDs
+      const currentHistoryIds = user.histories.map((entry) => entry.id);
+  
+      // Check for duplicates
+      if (currentHistoryIds.includes(articleId)) {
+        return ctx.send({ message: 'Article already exists in history' });
+      }
+  
+      // Append new article ID to the history list
+      currentHistoryIds.push(articleId);
+  
+      // Update the user's history
+      await strapi.db.query('plugin::users-permissions.user').update({
+        where: { id: userId },
+        data: {
+          histories: currentHistoryIds.map((id) => ({ id })),
+        },
+      });
+  
+      return ctx.send({ message: 'Successfully added the article to history' });
+    } catch (error) {
+      return ctx.throw(500, `Error adding article to history: ${error.message}`);
+    }
+  },
+  
+
+  
+ 
+  
+  
+  async fetchReadingHistory(ctx) {
+    const userId = ctx.state.user?.id;
+  
+    if (!userId) {
+      return ctx.throw(401, 'User not authenticated');
+    }
+  
+    // Extract pagination parameters from query
+    const query = ctx.query as Record<string, any>;
+    const page = parseInt(query.page || '1', 10); // Default to page 1
+    const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
+  
+    try {
+      // Fetch user's histories with pagination applied
+      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+        populate: '*', 
+        pagination: { page, pageSize },
+      });
+  
+    
+
+      if (!user || !user['histories'].length) {
+        return ctx.send({
+          message: 'No reading history found',
+          data: { history: [] },
+          pagination: { page, pageSize, total: 0, totalPages: 0 },
+        });
+      }
+  
+      const historyIds = user['histories'].map((history) => history.id);
+  
+      // Fetch full article data for each history entry using the IDs
+      const [articles, total] = await Promise.all([
+        strapi.entityService.findMany('api::article.article', {
+          filters: { id: { $in: historyIds } },
+          populate: ['cover', 'category'],
+        }),
+        strapi.entityService.count('api::article.article', {
+          filters: { id: { $in: historyIds } },
+        }),
+      ]);
+  
+      const totalPages = Math.ceil(total / pageSize);
+  
+      // Map the article data to the response format
+      const history = articles.map((article) => ({
+        id: article.id,
+        title: article.title,
+        description: article.description,
+        slug: article.slug,
+        createdAt: article.createdAt,
+        newslink: article.newslink,
+        cover: article['cover'],
+        category: article['category'],
+      }));
+  
+      return ctx.send({
+        message: 'Successfully retrieved history',
+        history ,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages,
+        },
+      });
+    } catch (error) {
+      return ctx.throw(500, `Error fetching reading history: ${error.message}`);
+    }
   }
-  
-  
-  
-  
   
 }));
