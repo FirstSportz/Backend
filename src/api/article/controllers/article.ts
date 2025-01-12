@@ -349,8 +349,11 @@ export default factories.createCoreController('api::article.article', ({ strapi 
     // Ensure recentSearch is an array or initialize it as one
     const currentSearches = Array.isArray(user?.recentsearch) ? user.recentsearch : [];
 
+    // Remove any existing entry with the same query
+    const filteredSearches = currentSearches.filter(entry => entry['query'] !== searchQuery);
+
    // Update recent searches while maintaining a maximum of 10 entries
-   const updatedSearches = [...currentSearches, recentSearchEntry].slice(-10);
+   const updatedSearches = [...filteredSearches, recentSearchEntry].slice(-5);
 
 // Update the user with the new recent search data
 await strapi.entityService.update('plugin::users-permissions.user', userId, {
