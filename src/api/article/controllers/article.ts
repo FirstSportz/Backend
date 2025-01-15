@@ -1,4 +1,5 @@
 import { factories } from '@strapi/strapi';
+import messaging from '../../../../config/fcm-config'; // Import Firebase config
 
 export default factories.createCoreController('api::article.article', ({ strapi }) => ({
  
@@ -496,6 +497,65 @@ await strapi.entityService.update('plugin::users-permissions.user', userId, {
     } catch (error) {
       return ctx.throw(500, `Error fetching reading history: ${error.message}`);
     }
-  }
+  },
+
+
+  async create(ctx) {
+    // Call the default create method to add a new article
+    const response = await super.create(ctx);
+
+    const article = response.data;
+
+    if (article) {
+      const title = article.attributes.title;
+      const description = article.attributes.description;
+      const newsId = article.id;
+      console.log('article notifications:', article);
+      try {
+        // Fetch all users with FCM tokens
+        const users = await strapi.service('plugin::users-permissions.user').find();
+
+        const userNotifications = users.results
+          .filter(user => user.deviceToken)  // Ensure user has a valid FCM token
+          .map(user => ({
+            token: user.deviceToken,
+            notification: {
+              title: `New Article: ${title}`,
+              body: description,
+            },
+            data: {
+              newsId: newsId.toString(),
+            },
+            userId: user.id,
+          }));
+
+        // Send notifications to all users with FCM tokens
+        for (const { token, notification, data, userId } of userNotifications) {
+          await messaging.send({
+            token,
+            notification,
+            data,
+          });
+
+          // Save notification in the database
+          await strapi.service('api::notification.notification').create({
+            data: {
+              title,
+              message: description,
+              news: newsId,
+              read: false,
+              timestamp: new Date(),
+              user: userId,
+            },
+          });
+        }
+      } catch (error) {
+        console.error('Error sending notifications:', error);
+      }
+    }
+
+    return response;
+  },
   
+ 
 }));

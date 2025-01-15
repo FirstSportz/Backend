@@ -33,6 +33,26 @@ export default {
           policies: [], // optional: if you want to restrict to authenticated users only
         },
       },
+
+       {
+        method: 'POST',
+        path: '/users/update-read-status',
+        handler: 'user.updateReadStatus',
+        config: {
+          policies: [],
+          middlewares: [],
+        },
+      },
+
+      {
+        method: 'GET',
+        path: '/users/notifications',
+        handler: 'user.listNotifications',
+        config: {
+          policies: [],
+          middlewares: [],
+        },
+      },
     ],
   };
   

@@ -143,4 +143,64 @@ export default factories.createCoreController('plugin::users-permissions.user', 
     }
   },
 
+  async updateReadStatus(ctx) {
+    try {
+      const { newsId } = ctx.request.body;
+      const userId = ctx.state.user.id; // Get the authenticated user's ID
+
+      if (!userId || !newsId) {
+        return ctx.badRequest('User ID and News ID are required.');
+      }
+
+      // Fetch user notification history
+      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+        fields: ['notificationHistory'],
+      });
+
+      let notificationHistory = Array.isArray(user.notificationHistory) ? user.notificationHistory : [];
+
+      // Update read status
+      notificationHistory = notificationHistory.map(notification => {
+        if (typeof notification === 'object' && notification['newsId'] === newsId) {
+          return { ...notification, read: true };
+        }
+        return notification;
+      });
+
+      // Save updated notification history
+      await strapi.entityService.update('plugin::users-permissions.user', userId, {
+        data: { notificationHistory },
+      });
+
+      ctx.send({ message: 'Read status updated successfully.' });
+    } catch (error) {
+      strapi.log.error(`Error updating read status: ${error.message}`);
+      ctx.internalServerError('Failed to update read status.');
+    }
+  },
+
+  async listNotifications(ctx) {
+    try {
+      const userId = ctx.state.user.id; // Get the authenticated user's ID
+
+      if (!userId) {
+        return ctx.badRequest('User ID is required.');
+      }
+
+      // Fetch user notification history
+      const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+        fields: ['notificationHistory'],
+      });
+
+      const notifications = Array.isArray(user.notificationHistory)
+        ? user.notificationHistory.sort((a, b) => new Date(b['timestamp']).getTime() - new Date(a['timestamp']).getTime())
+        : [];
+
+      ctx.send({ notifications });
+    } catch (error) {
+      strapi.log.error(`Error fetching notifications: ${error.message}`);
+      ctx.internalServerError('Failed to fetch notifications.');
+    }
+  },
+
 }));
