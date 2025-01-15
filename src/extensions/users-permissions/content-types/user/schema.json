@@ -109,6 +109,9 @@
       "relation": "manyToMany",
       "target": "api::article.article",
       "inversedBy": "userHistory"
+    },
+    "notificationHistory": {
+      "type": "json"
     }
   }
 }
