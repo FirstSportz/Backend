@@ -182,25 +182,70 @@ export default factories.createCoreController('plugin::users-permissions.user', 
   async listNotifications(ctx) {
     try {
       const userId = ctx.state.user.id; // Get the authenticated user's ID
-
+  
       if (!userId) {
         return ctx.badRequest('User ID is required.');
       }
+  
+      // Pagination parameters
+      const query = ctx.query as Record<string, any>;
+      const page = parseInt(query.page || '1', 10); // Default to page 1
+      const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
 
+      
+  
       // Fetch user notification history
       const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
         fields: ['notificationHistory'],
       });
-
+  
       const notifications = Array.isArray(user.notificationHistory)
         ? user.notificationHistory.sort((a, b) => new Date(b['timestamp']).getTime() - new Date(a['timestamp']).getTime())
         : [];
-
-      ctx.send({ notifications });
+  
+      // Slice notifications for the current page
+      const paginatedNotifications = notifications.slice(startIndex, endIndex);
+  
+      // Fetch related article data for each notification
+      const enhancedNotifications = await Promise.all(
+        paginatedNotifications.map(async (notification) => {
+          const article = await strapi.entityService.findOne('api::article.article', notification['newsId'], {
+            fields: ['title', 'description', 'createdAt','newslink'], // Select desired fields
+            populate: '*', // Populate category if needed
+          });
+  
+          return {
+            title: notification['title']||null,
+            message: notification['message']||null,
+            newsId: notification['newsId']||null,
+            timestamp: new Date(notification['timestamp']).toISOString(), // Convert to ISO string
+            read: notification['read'],
+            newslink: article['newslink']||null,
+            cover: article["cover"] || null, // Handle case where cover or article may be missing
+          };
+        })
+      );
+  
+      // Total count for pagination
+      const total = notifications.length;
+      const totalPages = Math.ceil(total / pageSize);
+  
+      ctx.send({
+        message: 'Successfully retrieved notifications',
+        notifications: enhancedNotifications,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages,
+        },
+      });
     } catch (error) {
       strapi.log.error(`Error fetching notifications: ${error.message}`);
       ctx.internalServerError('Failed to fetch notifications.');
     }
-  },
+  },    
 
 }));
