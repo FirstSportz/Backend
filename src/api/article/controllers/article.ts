@@ -57,6 +57,19 @@ export default factories.createCoreController('api::article.article', ({ strapi 
         category: article['category'],
       }));
   
+      if(page>totalPages)
+      {
+        return ctx.send({
+          message: 'Successfully retrieved bookmarks',
+          bookmarks:[],
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages,
+          },
+        });
+      }
       return ctx.send({
         message: 'Successfully retrieved bookmarks',
         bookmarks,
@@ -147,28 +160,57 @@ export default factories.createCoreController('api::article.article', ({ strapi 
   },
 
   async fetchAllNews(ctx) {
-    const query = ctx.query as Record<string, any>; // Explicitly cast query to a record
-
+    const query = ctx.query as Record<string, any>;
+  
     const page = parseInt(query.page || '1', 10); // Default to page 1
     const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
-
+    const startIndex = (page - 1) * pageSize;
+  
     try {
-      // Fetch all articles with pagination
-      const articles = await strapi.entityService.findMany('api::article.article', {
-        ...query,
-        pagination: { page, pageSize },
-        populate: '*',
-      });
-
-      // Count total articles for pagination metadata
+      // Fetch total count of articles for pagination metadata
       const total = await strapi.entityService.count('api::article.article', {
         ...query,
       });
-
+  
       const totalPages = Math.ceil(total / pageSize);
-
+  
+      // If requested page exceeds totalPages, return an empty array
+      if (page > totalPages) {
+        return ctx.send({
+          message: 'Successfully retrieved news',
+          articles: [],
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages,
+          },
+        });
+      }
+  
+      // Fetch articles with pagination
+      const articles = await strapi.entityService.findMany('api::article.article', {
+        ...query,
+        pagination: {
+          start: startIndex,
+          limit: pageSize,
+        },
+        populate: '*',
+      });
+  
+      // Format the result
+      const formattedArticles = articles.map((article) => ({
+        id: article.id,
+        title: article.title || null,
+        description: article.description || null,
+        createdAt: new Date(article.createdAt).toISOString(), // Convert date to ISO string
+        newslink: article.newslink || null,
+        cover: article["cover"] || null,
+      }));
+  
       return ctx.send({
-        articles,
+        message: 'Successfully retrieved news',
+        articles: formattedArticles,
         pagination: {
           page,
           pageSize,
@@ -177,9 +219,11 @@ export default factories.createCoreController('api::article.article', ({ strapi 
         },
       });
     } catch (error) {
+      strapi.log.error(`Error fetching news: ${error.message}`);
       return ctx.throw(500, `Error fetching all news: ${error.message}`);
     }
   },
+  
 
   // Function to fetch today's news details
   async fetchTodaysNews(ctx) {
@@ -205,14 +249,6 @@ export default factories.createCoreController('api::article.article', ({ strapi 
     };
   
     try {
-      // Fetch articles with pagination
-      const articles = await strapi.entityService.findMany('api::article.article', {
-        ...query,
-        filters, // Apply the merged filters
-        pagination: { page, pageSize },
-        populate: '*',
-      });
-  
       // Count total articles for pagination metadata
       const total = await strapi.entityService.count('api::article.article', {
         filters,
@@ -230,6 +266,32 @@ export default factories.createCoreController('api::article.article', ({ strapi 
       // Fetch global popular tags
       const popularTags = await strapi.services['api::tag.tag'].getPopularTags();
   
+      // If requested page exceeds totalPages, return an empty array for articles
+      if (page > totalPages) {
+        return ctx.send({
+          articles: [],
+          recentSearch,
+          popularTags,
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages,
+          },
+        });
+      }
+  
+      // Fetch articles with pagination
+      const articles = await strapi.entityService.findMany('api::article.article', {
+        ...query,
+        filters, // Apply the merged filters
+        pagination: {
+          start: (page - 1) * pageSize,
+          limit: pageSize,
+        },
+        populate: '*',
+      });
+  
       return ctx.send({
         articles,
         recentSearch,
@@ -244,7 +306,7 @@ export default factories.createCoreController('api::article.article', ({ strapi 
     } catch (error) {
       return ctx.throw(500, `Error fetching today's news: ${error.message}`);
     }
-  },
+  },  
 
   async search(ctx) { 
     const queryParams = ctx.query as Record<string, any>; // Extract query parameters
@@ -360,6 +422,24 @@ export default factories.createCoreController('api::article.article', ({ strapi 
 await strapi.entityService.update('plugin::users-permissions.user', userId, {
   data: { recentsearch: updatedSearches },
 });
+
+if(page>totalPages)
+{
+   // Return combined results with pagination metadata
+   return ctx.send({
+    message: 'Search results',
+    data: {
+      people:[],
+      events: [],
+      pagination: {
+        page,
+        pageSize,
+        total: totalArticles,
+        totalPages,
+      },
+    },
+  });
+}
       // Return combined results with pagination metadata
       return ctx.send({
         message: 'Search results',
@@ -378,6 +458,9 @@ await strapi.entityService.update('plugin::users-permissions.user', userId, {
       return ctx.throw(500, `Error fetching search results: ${error.message}`);
     }
   },
+  
+  
+  
 
   async addToHistory(ctx) {
     try {
@@ -441,15 +524,12 @@ await strapi.entityService.update('plugin::users-permissions.user', userId, {
     const pageSize = parseInt(query.pageSize || '10', 10); // Default page size is 10
   
     try {
-      // Fetch user's histories with pagination applied
+      // Fetch user's histories
       const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
-        populate: '*', 
-        pagination: { page, pageSize },
+        populate: '*',
       });
   
-    
-
-      if (!user || !user['histories'].length) {
+      if (!user || !user['histories']?.length) {
         return ctx.send({
           message: 'No reading history found',
           data: { history: [] },
@@ -459,18 +539,36 @@ await strapi.entityService.update('plugin::users-permissions.user', userId, {
   
       const historyIds = user['histories'].map((history) => history.id);
   
-      // Fetch full article data for each history entry using the IDs
-      const [articles, total] = await Promise.all([
-        strapi.entityService.findMany('api::article.article', {
-          filters: { id: { $in: historyIds } },
-          populate: ['cover', 'category'],
-        }),
-        strapi.entityService.count('api::article.article', {
-          filters: { id: { $in: historyIds } },
-        }),
-      ]);
+      // Count total articles for pagination
+      const total = await strapi.entityService.count('api::article.article', {
+        filters: { id: { $in: historyIds } },
+      });
   
       const totalPages = Math.ceil(total / pageSize);
+  
+      // Handle cases where page exceeds totalPages
+      if (page > totalPages) {
+        return ctx.send({
+          message: 'No more history available',
+          data: { history: [] },
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages,
+          },
+        });
+      }
+  
+      // Fetch full article data for each history entry with pagination applied
+      const articles = await strapi.entityService.findMany('api::article.article', {
+        filters: { id: { $in: historyIds } },
+        pagination: {
+          start: (page - 1) * pageSize,
+          limit: pageSize,
+        },
+        populate: ['cover', 'category'],
+      });
   
       // Map the article data to the response format
       const history = articles.map((article) => ({
@@ -486,7 +584,7 @@ await strapi.entityService.update('plugin::users-permissions.user', userId, {
   
       return ctx.send({
         message: 'Successfully retrieved history',
-        history ,
+        history,
         pagination: {
           page,
           pageSize,
@@ -498,6 +596,7 @@ await strapi.entityService.update('plugin::users-permissions.user', userId, {
       return ctx.throw(500, `Error fetching reading history: ${error.message}`);
     }
   },
+  
 
 
   async create(ctx) {
