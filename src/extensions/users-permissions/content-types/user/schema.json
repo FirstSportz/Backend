@@ -112,6 +112,9 @@
     },
     "notificationHistory": {
       "type": "json"
+    },
+    "isGoogleSignIn": {
+      "type": "boolean"
     }
   }
 }

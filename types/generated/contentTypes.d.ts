@@ -484,6 +484,7 @@ export interface PluginUsersPermissionsUser
     recentsearch: Schema.Attribute.JSON;
     histories: Schema.Attribute.Relation<'manyToMany', 'api::article.article'>;
     notificationHistory: Schema.Attribute.JSON;
+    isGoogleSignIn: Schema.Attribute.Boolean;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

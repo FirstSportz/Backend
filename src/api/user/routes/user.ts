@@ -1,6 +1,14 @@
 export default {
     routes: [
       {
+        method: "POST",
+        path: "/auth/google-signin",
+        handler: "user.googleSignIn",
+        config: {
+          auth: false,
+        },
+      },
+      {
         method: 'POST',
         path: '/users/categories/add',
         handler: 'user.addCategoriesToUser',

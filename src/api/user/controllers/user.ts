@@ -1,5 +1,7 @@
 import { factories } from '@strapi/strapi';
 import { Context } from 'koa';
+import jwt from "jsonwebtoken";
+import axios from "axios";
 
 interface UserWithAvatar {
     id: number;
@@ -10,6 +12,77 @@ interface UserWithAvatar {
   }
 
 export default factories.createCoreController('plugin::users-permissions.user', ({ strapi }) => ({
+  
+  async googleSignIn(ctx) {
+    const { idToken } = ctx.request.body;
+
+    if (!idToken) {
+      return ctx.throw(400, "Google ID token is required.");
+    }
+
+    try {
+      // Verify token with Google
+      const googleResponse = await axios.get(
+        `https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${idToken}`
+      );
+
+      const { email, name, picture, sub } = googleResponse.data;
+
+      // Check if user already exists
+      let user = await strapi.query("plugin::users-permissions.user").findOne({
+        where: { email },
+      });
+
+      if (!user) {
+        // Create new user
+        user = await strapi.query("plugin::users-permissions.user").create({
+          data: {
+            username: name,
+            email,
+            provider: "google",
+            confirmed: true,
+            blocked: false,
+            isGoogleSignIn: true,
+            profilePicture: picture,
+            googleId: sub, // Store Google unique ID
+          },
+        });
+      }
+
+      // Generate JWT Token
+      const jwtToken = jwt.sign(
+        { id: user.id },
+        strapi.config.get("plugin.users-permissions.jwtSecret"),
+        { expiresIn: "7d" }
+      );
+
+      // Send response
+      return ctx.send({
+        jwt: jwtToken,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          provider: user.provider,
+          confirmed: user.confirmed,
+          blocked: user.blocked,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+          phoneNumber: user.phoneNumber || null,
+          deviceToken: user.deviceToken || null,
+          deviceOS: user.deviceOS || null,
+          recentsearch: user.recentsearch || [],
+          notificationHistory: user.notificationHistory || null,
+          isGoogleSignIn: user.isGoogleSignIn || false,
+          profilePicture: picture || null,
+        },
+      });
+    } catch (error) {
+      console.error("Google Sign-In Error:", error.message);
+      return ctx.throw(401, "Invalid Google authentication.");
+    }
+  },
+  
   /**
    * Add categories to a user
    * @param ctx - The request context
