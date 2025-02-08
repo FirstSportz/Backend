@@ -28,6 +28,15 @@ export default factories.createCoreController('plugin::users-permissions.user', 
 
       const { email, name, picture, sub } = googleResponse.data;
 
+       // Fetch the default "Authenticated" role ID
+       const authenticatedRole = await strapi.query("plugin::users-permissions.role").findOne({
+        where: { type: "authenticated" },
+      });
+
+      if (!authenticatedRole) {
+        return ctx.throw(500, "Authenticated role not found.");
+      }
+
       // Check if user already exists
       let user = await strapi.query("plugin::users-permissions.user").findOne({
         where: { email },
@@ -44,7 +53,7 @@ export default factories.createCoreController('plugin::users-permissions.user', 
             blocked: false,
             isGoogleSignIn: true,
             profilePicture: picture,
-            role:"Authenticated",
+            role: authenticatedRole.id, // Assign the role
             googleId: sub, // Store Google unique ID
           },
         });
