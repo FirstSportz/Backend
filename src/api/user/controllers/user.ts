@@ -2,7 +2,6 @@ import { factories } from '@strapi/strapi';
 import { Context } from 'koa';
 import jwt from "jsonwebtoken";
 import axios from "axios";
-import { OAuth2Client } from "google-auth-library";
 
 interface UserWithAvatar {
     id: number;
@@ -11,8 +10,6 @@ interface UserWithAvatar {
       url: string;
     };
   }
-
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID); // Set this in your .env file
 
 export default factories.createCoreController('plugin::users-permissions.user', ({ strapi }) => ({
   
@@ -24,22 +21,20 @@ export default factories.createCoreController('plugin::users-permissions.user', 
     }
 
     try {
-      // Verify the Google ID Token using Google's OAuth2Client
-      const ticket = await client.verifyIdToken({
-        idToken,
-        audience: process.env.GOOGLE_CLIENT_ID, // Your client ID
-      });
+      // Verify token with Google
+      const googleResponse = await axios.get(
+        `https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${idToken}`
+      );
 
-      // Extract user details from token
-      const { email, name, picture, sub } = ticket.getPayload();
+      const { email, name, picture, sub } = googleResponse.data;
 
-      // Check if user exists in Strapi
+      // Check if user already exists
       let user = await strapi.query("plugin::users-permissions.user").findOne({
         where: { email },
       });
 
       if (!user) {
-        // Create new user if they don't exist
+        // Create new user
         user = await strapi.query("plugin::users-permissions.user").create({
           data: {
             username: name,
@@ -54,14 +49,14 @@ export default factories.createCoreController('plugin::users-permissions.user', 
         });
       }
 
-      // Generate JWT Token using the correct secret
+      // Generate JWT Token
       const jwtToken = jwt.sign(
         { id: user.id },
-        process.env.JWT_SECRET, // Ensure this is set in your .env file
+        strapi.config.get("plugin.users-permissions.jwtSecret"),
         { expiresIn: "7d" }
       );
 
-      // Send response with all required user details
+      // Send response
       return ctx.send({
         jwt: jwtToken,
         user: {
@@ -79,7 +74,7 @@ export default factories.createCoreController('plugin::users-permissions.user', 
           recentsearch: user.recentsearch || [],
           notificationHistory: user.notificationHistory || null,
           isGoogleSignIn: user.isGoogleSignIn || false,
-          profilePicture: user.profilePicture || null,
+          profilePicture: picture || null,
         },
       });
     } catch (error) {
