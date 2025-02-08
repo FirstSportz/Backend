@@ -14,7 +14,7 @@ interface UserWithAvatar {
 export default factories.createCoreController('plugin::users-permissions.user', ({ strapi }) => ({
   
   async googleSignIn(ctx) {
-    const { idToken } = ctx.request.body;
+    const { deviceToken,deviceOS,idToken } = ctx.request.body;
 
     if (!idToken) {
       return ctx.throw(400, "Google ID token is required.");
@@ -54,6 +54,8 @@ export default factories.createCoreController('plugin::users-permissions.user', 
             isGoogleSignIn: true,
             profilePicture: picture,
             role: authenticatedRole.id, // Assign the role
+            deviceOS:deviceOS,
+            deviceToken:deviceToken,
             googleId: sub, // Store Google unique ID
           },
         });
