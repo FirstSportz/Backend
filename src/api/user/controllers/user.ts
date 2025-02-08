@@ -44,6 +44,7 @@ export default factories.createCoreController('plugin::users-permissions.user', 
             blocked: false,
             isGoogleSignIn: true,
             profilePicture: picture,
+            role:"Authenticated",
             googleId: sub, // Store Google unique ID
           },
         });
